@@ -103,6 +103,20 @@ func main() {
 		ClientSecret: "09d1fbf0a3d64525bcd1b3cb0103de2b",
 		TokenURL:     provider.Endpoint().TokenURL,
 	}
+	httpClient := clientConfig.Client(context.Background())
+	response, err := httpClient.Get("http://stratus-pie.tropos-rnd.com/v2/tenantmgtsvc/tenants/c1a46987-cbd3-45db-b94a-a6544116fc2d")
+	//response, err := httpClient.Post("http://stratus-pie.tropos-rnd.com/v2/tenantmgtsvc/tenants/", "application/json", nil)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	tenants, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	defer response.Body.Close()
+
+	log.Println(string(tenants))
 	token, token_error := clientConfig.Token(context.Background())
 	if token_error != nil {
 		log.Fatal(token_error.Error())
