@@ -2,26 +2,32 @@ package main
 
 import (
 	"context"
-	"golang.org/x/oauth2/clientcredentials"
 
 	// "context"
 	"fmt"
 	"log"
 	"os"
 
+	// fiber2
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
-	oteltrace "go.opentelemetry.io/otel/trace"
 
+	// open telemetry
+	/*	"go.opentelemetry.io/otel"
+		"go.opentelemetry.io/otel/attribute"
+		stdout "go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+		"go.opentelemetry.io/otel/propagation"
+		"go.opentelemetry.io/otel/sdk/resource"
+		sdktrace "go.opentelemetry.io/otel/sdk/trace"
+		semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+		oteltrace "go.opentelemetry.io/otel/trace"
+	*/
+	"github.com/signalfx/splunk-otel-go/distro"
+
+	// oauth2
 	"github.com/coreos/go-oidc/v3/oidc"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 type Subscription struct {
@@ -30,6 +36,7 @@ type Subscription struct {
 }
 
 func getSubscription(c *fiber.Ctx) error {
+	checkppid()
 	subscription := Subscription{
 		Name:    "Elon",
 		Product: "Tesla",
@@ -38,6 +45,7 @@ func getSubscription(c *fiber.Ctx) error {
 }
 
 func createSubscription(c *fiber.Ctx) error {
+	checkppid()
 	subs := new(Subscription)
 	err := c.BodyParser(subs)
 	if err != nil {
@@ -51,15 +59,26 @@ func createSubscription(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(subs)
 }
 
-var tracer = otel.Tracer("fiber-server")
+// var tracer = otel.Tracer("fiber-server")
 
 func main() {
-	tp := initTracer()
+	// tp := initTracer()
+	// defer func() {
+	// 	if err := tp.Shutdown(context.Background()); err != nil {
+	// 		log.Printf("Error shutting down tracer provider: %v", err)
+	// 	}
+	// }()
+	_ = os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=my-app,service.version=1.2.3,deployment.environment=development")
+	sdk, err := distro.Run()
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer func() {
-		if err := tp.Shutdown(context.Background()); err != nil {
-			log.Printf("Error shutting down tracer provider: %v", err)
+		if err := sdk.Shutdown(context.Background()); err != nil {
+			log.Fatal(err)
 		}
 	}()
+
 	provider, err := oidc.NewProvider(context.Background(), "https://pie.authz.wpp.api.hp.com/")
 
 	if err != nil {
@@ -90,15 +109,8 @@ func main() {
 	}
 	log.Println(token.AccessToken)
 
-	// Print current process
-	if fiber.IsChild() {
-		fmt.Printf("[%d] Child\n", os.Getppid())
-	} else {
-		fmt.Printf("[%d] Master\n", os.Getppid())
-	}
-
 	app := fiber.New(fiber.Config{
-		// Prefork: true,
+		//Prefork: true,
 	})
 	app.Use(logger.New())
 	app.Use(requestid.New(requestid.Config{
@@ -106,8 +118,9 @@ func main() {
 	}))
 
 	app.Get("/", func(ctx *fiber.Ctx) error {
-		_, span := tracer.Start(ctx.UserContext(), "getUser", oteltrace.WithAttributes(attribute.String("id", ctx.BaseURL())))
-		defer span.End()
+		// _, span := tracer.Start(ctx.UserContext(), "getUser", oteltrace.WithAttributes(attribute.String("id", ctx.BaseURL())))
+		// defer span.End()
+		checkppid()
 		return ctx.SendString("Hello")
 	})
 
@@ -120,22 +133,31 @@ func main() {
 	}
 }
 
-func initTracer() *sdktrace.TracerProvider {
-	exporter, err := stdout.New(stdout.WithPrettyPrint())
-	//exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
-	if err != nil {
-		log.Fatal(err)
+// func initTracer() *sdktrace.TracerProvider {
+// 	exporter, err := stdout.New(stdout.WithPrettyPrint())
+// 	//exporter, err := jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint("http://localhost:14268/api/traces")))
+// 	if err != nil {
+// 		log.Fatal(err)
+// 	}
+// 	tp := sdktrace.NewTracerProvider(
+// 		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+// 		sdktrace.WithBatcher(exporter),
+// 		sdktrace.WithResource(
+// 			resource.NewWithAttributes(
+// 				semconv.SchemaURL,
+// 				semconv.ServiceNameKey.String("my-service"),
+// 			)),
+// 	)
+// 	otel.SetTracerProvider(tp)
+// 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+// 	return tp
+// }
+
+// Print current process
+func checkppid() {
+	if fiber.IsChild() {
+		fmt.Printf("[%d] Child\n", os.Getppid())
+	} else {
+		fmt.Printf("[%d] Master\n", os.Getppid())
 	}
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithSampler(sdktrace.AlwaysSample()),
-		sdktrace.WithBatcher(exporter),
-		sdktrace.WithResource(
-			resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String("my-service"),
-			)),
-	)
-	otel.SetTracerProvider(tp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
-	return tp
 }
