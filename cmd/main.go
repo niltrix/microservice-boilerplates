@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io/ioutil"
 
 	// "context"
 	"fmt"
@@ -59,15 +60,10 @@ func createSubscription(c *fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(subs)
 }
 
-// var tracer = otel.Tracer("fiber-server")
-
 func main() {
-	// tp := initTracer()
-	// defer func() {
-	// 	if err := tp.Shutdown(context.Background()); err != nil {
-	// 		log.Printf("Error shutting down tracer provider: %v", err)
-	// 	}
-	// }()
+	os.Setenv("HTTPS_PROXY", "web-proxy.sg.hpicorp.net:8080")
+	//os.Setenv("HTTPS_PROXY", "15.89.14.62:8080")
+
 	_ = os.Setenv("OTEL_RESOURCE_ATTRIBUTES", "service.name=my-app,service.version=1.2.3,deployment.environment=development")
 	sdk, err := distro.Run()
 	if err != nil {
@@ -104,7 +100,7 @@ func main() {
 		TokenURL:     provider.Endpoint().TokenURL,
 	}
 	httpClient := clientConfig.Client(context.Background())
-	response, err := httpClient.Get("http://stratus-pie.tropos-rnd.com/v2/tenantmgtsvc/tenants/c1a46987-cbd3-45db-b94a-a6544116fc2d")
+	response, err := httpClient.Get("https://stratus-pie.tropos-rnd.com/v2/tenantmgtsvc/tenants/c1a46987-cbd3-45db-b94a-a6544116fc2d")
 	//response, err := httpClient.Post("http://stratus-pie.tropos-rnd.com/v2/tenantmgtsvc/tenants/", "application/json", nil)
 	if err != nil {
 		log.Fatal(err.Error())
